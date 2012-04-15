@@ -25,6 +25,7 @@ GENERIC_BINARIES_SOURCE_DIR:=$(SRC_DIR)
 
 GENERIC_BINARIES_COMMON_SOURCE_FILES+=			\
    UI/ui.c  \
+   UI/gui.c \
    UI/gamepad.c \
    Navdata/navdata.c    \
    Video/video_stage.c
