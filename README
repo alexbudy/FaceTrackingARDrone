@@ -1,1 +1,8 @@
-The FaceTrackingARDrone is control software built on top of the ARDrone SDK to implement face-tracking for the Parrot.AR Drone quadrotor. 
+The FaceTrackingARDrone is control software built on top of the ARDrone SDK to 
+implement face-tracking for the Parrot.AR Drone quadrotor.
+
+Threads are managed in (~SDK)/Examples/Linux/sdk_demo/Sources/ardrone_testing_tool.c
+Testing can be done in (~SDK)/Examples/Linux/sdk_demo/Sources/Navdata/. Build the 
+project in (~SDK)/Examples/Linux/sdk_demo/Build/.
+
+ 
