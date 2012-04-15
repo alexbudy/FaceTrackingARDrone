@@ -46,6 +46,8 @@
 
 #include "Video/video_stage.h"
 #include "UI/gui.h"
+#include "cv.h"
+#include "highgui.h" // if you want to display images with OpenCV functions
 
 #define NB_STAGES 10
 
@@ -57,6 +59,49 @@ static vp_os_mutex_t  video_update_lock = PTHREAD_MUTEX_INITIALIZER;
 C_RESULT output_gtk_stage_open( void *cfg, vp_api_io_data_t *in, vp_api_io_data_t *out)
 {
   return (SUCCESS);
+}
+
+IplImage *ipl_image_from_data(uint8_t* data, int reduced_image)
+{
+  IplImage *currframe;
+  IplImage *dst;
+ 
+  if (!reduced_image)
+  {
+    currframe = cvCreateImage(cvSize(320,240), IPL_DEPTH_8U, 3);
+    dst = cvCreateImage(cvSize(320,240), IPL_DEPTH_8U, 3);
+  }
+  else
+  {
+    currframe = cvCreateImage(cvSize(176, 144), IPL_DEPTH_8U, 3);
+    dst = cvCreateImage(cvSize(176,144), IPL_DEPTH_8U, 3);
+    currframe->widthStep = 320*3;
+  }
+ 
+  currframe->imageData = data;
+  cvCvtColor(currframe, dst, CV_BGR2RGB);
+  cvReleaseImage(&currframe);
+  return dst;
+}
+
+GdkPixbuf* pixbuf_from_opencv(IplImage *img, int resize)
+{
+  IplImage* converted = cvCreateImage(cvSize(img->width, img->height), IPL_DEPTH_8U, 3);
+  cvCvtColor(img, converted, CV_BGR2RGB);
+ 
+  GdkPixbuf* res = gdk_pixbuf_new_from_data(converted->imageData,
+                                           GDK_COLORSPACE_RGB,
+                                           FALSE,
+                                           8,
+                                           converted->width,
+                                           converted->height,
+                                           converted->widthStep,
+                                           NULL,
+                                           NULL);
+  if (resize)
+    res = gdk_pixbuf_scale_simple(res, 320, 240, GDK_INTERP_BILINEAR);
+ 
+  return res;
 }
 
 C_RESULT output_gtk_stage_transform( void *cfg, vp_api_io_data_t *in, vp_api_io_data_t *out)
@@ -78,7 +123,10 @@ C_RESULT output_gtk_stage_transform( void *cfg, vp_api_io_data_t *in, vp_api_io_
       pixbuf=NULL;
     }
  
-  // Creating the GdkPixbuf from the transmited data
+  // Creating the GdkPixbuf from the transmited data: data->IplImage->Pixbuf
+  IplImage *img = ipl_image_from_data((uint8_t*)in->buffers[0], 0);
+  pixbuf = pixbuf_from_opencv(img, 1);
+  /*
   pixbuf = gdk_pixbuf_new_from_data(pixbuf_data,
                     GDK_COLORSPACE_RGB,
                     FALSE,   // No alpha channel
@@ -88,7 +136,8 @@ C_RESULT output_gtk_stage_transform( void *cfg, vp_api_io_data_t *in, vp_api_io_
                     320 * 3, // New pixel every 3 bytes (3channel per pixel)
                     NULL,    // Function pointers
                     NULL);
- 
+  */
+
   gui_t *gui = get_gui();
   if (gui && gui->cam) // Displaying the image
     gtk_image_set_from_pixbuf(GTK_IMAGE(gui->cam), pixbuf);
