@@ -49,7 +49,6 @@
 #include "cv.h"
 #include "highgui.h" // if you want to display images with OpenCV functions
 #include "Video/camshifting.h"
-#include <time.h>
 
 #define NB_STAGES 10
 
@@ -165,18 +164,19 @@ C_RESULT output_gtk_stage_transform( void *cfg, vp_api_io_data_t *in, vp_api_io_
 
   // Image processing goes here
   int detected = 0;
-  if (!tracked_obj || camshiftcount > 100 || 1) // If no tracked object yet, look for a face to follow
+  if (!tracked_obj || camshiftcount > 100) // If no tracked object yet, look for a face to follow
   {
     CvRect* face_rect = detect_face(img, cascade, storage);
     if (face_rect)
     {
+      if (tracked_obj) destroy_tracked_object(tracked_obj); // Destroy previous, if exists
       tracked_obj = create_tracked_object(img, face_rect);
       cvRectangle(img, cvPoint(face_rect->x, face_rect->y), cvPoint(face_rect->x+face_rect->width, face_rect->y+face_rect->height), CV_RGB(255,0,0), 3, CV_AA, 0);
       camshiftcount = 0;
       detected = 1;
     }
   }
-  if (tracked_obj && !detected && 0)
+  if (tracked_obj && !detected)
   {
     CvBox2D face_box = camshift_track_face(img, tracked_obj);
     cvEllipseBox(img, face_box, CV_RGB(255,0,0), 3, CV_AA, 0);
