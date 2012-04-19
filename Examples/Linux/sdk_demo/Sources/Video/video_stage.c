@@ -48,16 +48,31 @@
 #include "UI/gui.h"
 #include "cv.h"
 #include "highgui.h" // if you want to display images with OpenCV functions
+#include "Video/camshifting.h"
+#include <time.h>
 
 #define NB_STAGES 10
+
+#define OPENCV_DATA "/home/michael/Desktop/camshift/" // FIXME: Change this to the location of your cascade xml files
+char *classifer = OPENCV_DATA "haarcascade_frontalface_default.xml";
 
 PIPELINE_HANDLE pipeline_handle;
 
 static uint8_t*  pixbuf_data       = NULL;
 static vp_os_mutex_t  video_update_lock = PTHREAD_MUTEX_INITIALIZER;
 
+static CvHaarClassifierCascade* cascade = 0;
+static CvMemStorage* storage = 0;
+static TrackedObj* tracked_obj = 0;
+static int camshiftcount = 0;
+
 C_RESULT output_gtk_stage_open( void *cfg, vp_api_io_data_t *in, vp_api_io_data_t *out)
 {
+  // initialize cascade classifier and storage
+  cascade = (CvHaarClassifierCascade*) cvLoad(classifer, 0, 0, 0 );
+  storage = cvCreateMemStorage(0);
+  //validate
+  assert(cascade && storage);
   return (SUCCESS);
 }
 
@@ -104,6 +119,28 @@ GdkPixbuf* pixbuf_from_opencv(IplImage *img, int resize)
   return res;
 }
 
+/* Given an image and a classider, detect and return region. */
+CvRect* detect_face (IplImage* image,
+                     CvHaarClassifierCascade* cascade,
+                     CvMemStorage* storage) {
+
+  CvRect* rect = 0;
+  
+  //get a sequence of faces in image
+  CvSeq *faces = cvHaarDetectObjects(image, cascade, storage,
+     1.1,                       //increase search scale by 10% each pass
+     6,                         //require 6 neighbors
+     CV_HAAR_DO_CANNY_PRUNING,  //skip regions unlikely to contain a face
+     cvSize(0, 0));             //use default face size from xml
+
+  //if one or more faces are detected, return the first one
+  if(faces && faces->total)
+    printf("Num faces: %i", faces->total);
+    rect = (CvRect*) cvGetSeqElem(faces, 0);
+
+  return rect;
+}
+
 C_RESULT output_gtk_stage_transform( void *cfg, vp_api_io_data_t *in, vp_api_io_data_t *out)
 {
   vp_os_mutex_lock(&video_update_lock);
@@ -123,20 +160,31 @@ C_RESULT output_gtk_stage_transform( void *cfg, vp_api_io_data_t *in, vp_api_io_
       pixbuf=NULL;
     }
  
-  // Creating the GdkPixbuf from the transmited data: data->IplImage->Pixbuf
+  // Convert raw data to IplImage format for OpenCV
   IplImage *img = ipl_image_from_data((uint8_t*)in->buffers[0], 0);
+
+  // Image processing goes here
+  int detected = 0;
+  if (!tracked_obj || camshiftcount > 100 || 1) // If no tracked object yet, look for a face to follow
+  {
+    CvRect* face_rect = detect_face(img, cascade, storage);
+    if (face_rect)
+    {
+      tracked_obj = create_tracked_object(img, face_rect);
+      cvRectangle(img, cvPoint(face_rect->x, face_rect->y), cvPoint(face_rect->x+face_rect->width, face_rect->y+face_rect->height), CV_RGB(255,0,0), 3, CV_AA, 0);
+      camshiftcount = 0;
+      detected = 1;
+    }
+  }
+  if (tracked_obj && !detected && 0)
+  {
+    CvBox2D face_box = camshift_track_face(img, tracked_obj);
+    cvEllipseBox(img, face_box, CV_RGB(255,0,0), 3, CV_AA, 0);
+    camshiftcount++;
+  }
+
+  // Convert IplImage to GdkPixbuf to display in Gtk
   pixbuf = pixbuf_from_opencv(img, 1);
-  /*
-  pixbuf = gdk_pixbuf_new_from_data(pixbuf_data,
-                    GDK_COLORSPACE_RGB,
-                    FALSE,   // No alpha channel
-                    8,       // 8 bits per pixel
-                    320,     // Image width
-                    288,     // Image height
-                    320 * 3, // New pixel every 3 bytes (3channel per pixel)
-                    NULL,    // Function pointers
-                    NULL);
-  */
 
   gui_t *gui = get_gui();
   if (gui && gui->cam) // Displaying the image
@@ -148,6 +196,9 @@ C_RESULT output_gtk_stage_transform( void *cfg, vp_api_io_data_t *in, vp_api_io_
 
 C_RESULT output_gtk_stage_close( void *cfg, vp_api_io_data_t *in, vp_api_io_data_t *out)
 {
+  if (cascade) cvReleaseHaarClassifierCascade(&cascade);
+  if (storage) cvReleaseMemStorage(&storage);
+  if (tracked_obj) destroy_tracked_object(tracked_obj);
   return (SUCCESS);
 }
 

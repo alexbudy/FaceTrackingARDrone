@@ -28,7 +28,8 @@ GENERIC_BINARIES_COMMON_SOURCE_FILES+=			\
    UI/gui.c \
    UI/gamepad.c \
    Navdata/navdata.c    \
-   Video/video_stage.c
+   Video/video_stage.c \
+   Video/camshifting.c
 
 GENERIC_INCLUDES+=					\
 	$(SRC_DIR) \
