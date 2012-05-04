@@ -4,6 +4,9 @@
 #include <config.h>
 #include <VP_Api/vp_api_thread_helper.h>
 
+float get_face_x();
+float get_face_y();
+float get_face_radius();
 
 PROTO_THREAD_ROUTINE(video_stage, data);
 

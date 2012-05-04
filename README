@@ -5,4 +5,5 @@ Threads are managed in (~SDK)/Examples/Linux/sdk_demo/Sources/ardrone_testing_to
 Testing can be done in (~SDK)/Examples/Linux/sdk_demo/Sources/Navdata/. Build the 
 project in (~SDK)/Examples/Linux/sdk_demo/Build/.
 
- 
+Controls are sent to the AR Drone in (~SDK)/Examples/Linux/sdk_demo/Sources/Navdata/navdata.c
+Video feed is processed and face detection is handled in (~SDK)/Examples/Linux/sdk_demo/Sources/Video/video_stage.c

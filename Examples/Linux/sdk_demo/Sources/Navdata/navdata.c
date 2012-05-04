@@ -1,6 +1,7 @@
 #include <ardrone_tool/Navdata/ardrone_navdata_client.h>
 
 #include <Navdata/navdata.h>
+#include <Video/video_stage.h>
 #include <stdio.h>
 
 /* Initialization local variables before event loop  */
@@ -15,22 +16,32 @@ inline C_RESULT demo_navdata_client_process( const navdata_unpacked_t* const nav
 	const navdata_demo_t*nd = &navdata->navdata_demo;
 	
 	static int stage = 0;
-	static float32_t init_psi;	
+	static float32_t init_psi;
+	float x;
+	float y;
+	float radius;
+	float gaz = 0;
+	float yaw = 0;
+	float theta = 0;
 	//ardrone_tool_set_ui_pad_start(0);
 	
 	printf("STAGE: %i \n", stage);
 	switch(stage) {
 	case 0: //liftoff
-		ardrone_tool_set_ui_pad_start(1);
+		//ardrone_tool_set_ui_pad_start(1);
 		if (nd->altitude > 300) {
 			stage = 1;
 			init_psi = nd->psi;		
 		}
 		break;
-	case 1: //turn
-		ardrone_at_set_progress_cmd(0, 0, 0, 0, -.5);
-		if (nd->psi > init_psi + 5000 && nd->psi < init_psi + 6000)
-			stage = 2;
+	case 1: //follow
+		x = get_face_x();
+		y = get_face_y();
+		if (x != -1)
+			yaw = (x-160)/160;
+		if (y != -1)
+			gaz = (120-y)/120;
+		ardrone_at_set_progress_cmd(0, 0, theta, gaz, yaw);
 		break;
 	case 2: //drop
 		ardrone_tool_set_ui_pad_start(0);
@@ -56,15 +67,15 @@ inline C_RESULT demo_navdata_client_process( const navdata_unpacked_t* const nav
 
 	//	
                                 
-	printf("=====================\nNavdata for flight demonstrations =====================\n\n");
+	/*printf("=====================\nNavdata for flight demonstrations =====================\n\n");
 
-	printf("Control state : %i\n",nd->ctrl_state);
+	printf("Control state : %i\n",nd->ctrl_state);*/
 	printf("Battery level : %i mV\n",nd->vbat_flying_percentage);
-	printf("Orientation   : [Theta] %4.3f  [Phi] %4.3f  [Psi] %4.3f\n",nd->theta,nd->phi,nd->psi);
+	/*printf("Orientation   : [Theta] %4.3f  [Phi] %4.3f  [Psi] %4.3f\n",nd->theta,nd->phi,nd->psi);
 	printf("Altitude      : %i\n",nd->altitude);
-	printf("Speed         : [vX] %4.3f  [vY] %4.3f  [vZPsi] %4.3f\n",nd->theta,nd->phi,nd->psi);
-
-	printf("\033[8A");
+	printf("Speed         : [vX] %4.3f  [vY] %4.3f  [vZPsi] %4.3f\n",nd->theta,nd->phi,nd->psi);*/
+	printf("Radius        : %4.3f\n", get_face_radius());
+	//printf("\033[8A");
 
   return C_OK;
 }

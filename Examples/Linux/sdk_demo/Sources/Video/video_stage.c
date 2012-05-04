@@ -49,6 +49,12 @@
 #include "cv.h"
 #include "highgui.h" // if you want to display images with OpenCV functions
 #include "Video/camshifting.h"
+#include <time.h>
+
+int64_t timespecDiff(struct timespec *timeA_p, struct timespec *timeB_p)
+{
+return ((timeA_p->tv_sec * 1000000000) + timeA_p->tv_nsec) - ((timeB_p->tv_sec * 1000000000) + timeB_p->tv_nsec);
+}
 
 #define NB_STAGES 10
 
@@ -59,11 +65,63 @@ PIPELINE_HANDLE pipeline_handle;
 
 static uint8_t*  pixbuf_data       = NULL;
 static vp_os_mutex_t  video_update_lock = PTHREAD_MUTEX_INITIALIZER;
+static vp_os_mutex_t  face_lock = PTHREAD_MUTEX_INITIALIZER;
 
 static CvHaarClassifierCascade* cascade = 0;
 static CvMemStorage* storage = 0;
 static TrackedObj* tracked_obj = 0;
 static int camshiftcount = 0;
+
+typedef struct FaceLocation
+{
+	int isDetected; //Boolean if face is detected
+	float x; //Center x location
+	float y; //Center y location
+	float radius; //Average of width and height
+}
+FaceLocation;
+
+static FaceLocation face_loc;
+
+void set_face_location( float x, float y, float radius, int isDetected )
+{
+	vp_os_mutex_lock(&face_lock);
+	face_loc.x = x;
+	face_loc.y = y;
+	face_loc.radius = radius;
+	face_loc.isDetected = isDetected;
+	vp_os_mutex_unlock(&face_lock);
+}
+
+float get_face_x()
+{
+	float x = -1;
+	vp_os_mutex_lock(&face_lock);
+	if(face_loc.isDetected)
+		x = face_loc.x;
+	vp_os_mutex_unlock(&face_lock);
+	return x;
+}
+
+float get_face_y()
+{
+	float y = -1;
+	vp_os_mutex_lock(&face_lock);
+	if(face_loc.isDetected)
+		y = face_loc.y;
+	vp_os_mutex_unlock(&face_lock);
+	return y;
+}
+
+float get_face_radius()
+{
+	float radius = -1;
+	vp_os_mutex_lock(&face_lock);
+	if(face_loc.isDetected)
+		radius = face_loc.radius;
+	vp_os_mutex_unlock(&face_lock);
+	return radius;
+}
 
 C_RESULT output_gtk_stage_open( void *cfg, vp_api_io_data_t *in, vp_api_io_data_t *out)
 {
@@ -163,6 +221,8 @@ C_RESULT output_gtk_stage_transform( void *cfg, vp_api_io_data_t *in, vp_api_io_
   IplImage *img = ipl_image_from_data((uint8_t*)in->buffers[0], 0);
 
   // Image processing goes here
+  struct timespec start, end;
+  clock_gettime(CLOCK_MONOTONIC, &start);
   int detected = 0;
   if (!tracked_obj || camshiftcount > 100) // If no tracked object yet, look for a face to follow
   {
@@ -172,6 +232,7 @@ C_RESULT output_gtk_stage_transform( void *cfg, vp_api_io_data_t *in, vp_api_io_
       if (tracked_obj) destroy_tracked_object(tracked_obj); // Destroy previous, if exists
       tracked_obj = create_tracked_object(img, face_rect);
       cvRectangle(img, cvPoint(face_rect->x, face_rect->y), cvPoint(face_rect->x+face_rect->width, face_rect->y+face_rect->height), CV_RGB(255,0,0), 3, CV_AA, 0);
+			cvCircle(img, cvPoint((face_rect->x + (face_rect->width)/2), (face_rect->y + (face_rect->height)/2)), 5, CV_RGB(0,0,255), -1, CV_AA, 0);
       camshiftcount = 0;
       detected = 1;
     }
@@ -179,9 +240,23 @@ C_RESULT output_gtk_stage_transform( void *cfg, vp_api_io_data_t *in, vp_api_io_
   if (tracked_obj && !detected)
   {
     CvBox2D face_box = camshift_track_face(img, tracked_obj);
-    cvEllipseBox(img, face_box, CV_RGB(255,0,0), 3, CV_AA, 0);
-    camshiftcount++;
+		if(face_box.size.height != -1)
+		{
+    	cvEllipseBox(img, face_box, CV_RGB(255,0,0), 3, CV_AA, 0);
+			cvCircle(img, cvPoint(face_box.center.x, face_box.center.y), 5, CV_RGB(0,0,255), -1, CV_AA, 0);
+			set_face_location(face_box.center.x, face_box.center.y, (face_box.size.height+face_box.size.width)/2, 1);
+    	camshiftcount++;
+		}
+		else
+		{
+			set_face_location(-1, -1, -1, 0);
+			destroy_tracked_object(tracked_obj);
+			tracked_obj = NULL;
+		}
   }
+  clock_gettime(CLOCK_MONOTONIC, &end);
+  uint64_t timeElapsed = timespecDiff(&end, &start)/1000000;
+  //printf("Face tracking time (ms): %i\n", timeElapsed);
 
   // Convert IplImage to GdkPixbuf to display in Gtk
   pixbuf = pixbuf_from_opencv(img, 1);

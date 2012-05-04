@@ -66,6 +66,12 @@ CvBox2D camshift_track_face (IplImage* image, TrackedObj* obj) {
   cvAnd(obj->prob, obj->mask, obj->prob, 0);
 
   //use CamShift to find the center of the new face probability
+  if(obj->prev_rect.width <= 0 || obj->prev_rect.height <= 0)
+  {
+    CvBox2D nullBox;
+    nullBox.size.height = -1;
+    return nullBox;
+  }
   cvCamShift(obj->prob, obj->prev_rect,
              cvTermCriteria(CV_TERMCRIT_EPS | CV_TERMCRIT_ITER, 10, 1),
              &components, &obj->curr_box);
