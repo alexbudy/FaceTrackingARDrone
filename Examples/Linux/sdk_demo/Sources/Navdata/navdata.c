@@ -4,6 +4,10 @@
 #include <Video/video_stage.h>
 #include <stdio.h>
 
+#define LIFTOFF 0
+#define FOLLOW 1
+#define LAND 2
+
 /* Initialization local variables before event loop  */
 inline C_RESULT demo_navdata_client_init( void* data )
 {
@@ -25,16 +29,19 @@ inline C_RESULT demo_navdata_client_process( const navdata_unpacked_t* const nav
 	float theta = 0;
 	//ardrone_tool_set_ui_pad_start(0);
 	
+    // other values
+    int height0 = 1500; // approximately eye-level for 5'7", in mm or pt
+
 	printf("STAGE: %i \n", stage);
 	switch(stage) {
-	case 0: //liftoff
+	case LIFTOFF:
 		//ardrone_tool_set_ui_pad_start(1);
 		if (nd->altitude > 300) {
 			stage = 1;
 			init_psi = nd->psi;		
 		}
 		break;
-	case 1: //follow
+	case FOLLOW:
 		x = get_face_x();
 		y = get_face_y();
 		if (x != -1)
@@ -43,7 +50,7 @@ inline C_RESULT demo_navdata_client_process( const navdata_unpacked_t* const nav
 			gaz = (120-y)/120;
 		ardrone_at_set_progress_cmd(0, 0, theta, gaz, yaw);
 		break;
-	case 2: //drop
+	case LAND:
 		ardrone_tool_set_ui_pad_start(0);
 		break;
 	}
